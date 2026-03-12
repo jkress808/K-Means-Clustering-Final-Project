@@ -1,0 +1,375 @@
+---
+title: 'STAT 302 Fall 2025 - Final Project'
+author: 'Johnny Kress'
+date: '12-12-25'
+output:
+  pdf_document: default
+  html_document:
+    number_sections: true
+  word_document: default
+---
+
+The assignment should be completed in an [R Markdown](https://rmarkdown.rstudio.com) document. Submit the assignment electronically on Gradescope by December 12, 2025, at 11:59 PM as a PDF file. No late submission will accepted.
+
+Each answer has to be based on `R` code that shows how the result was obtained. `R` code has to answer the question or solve the task.
+
+NOTE: \underline{Keep the following guidelines in mind:}:
+
+\begin{itemize}
+ \item Choose the most efficient code whenever possible.
+ \item Do not create functions unless needed.
+ \item Keep your code as short as possible.
+ \item Use only base `R`, unless the instructions explicitly request you to use a specific library.
+ \item Use chunk options to suppress unnecessary output or messages in your code. 
+ \item Ensure your code fits within the page and does not extend beyond the margins in the PDF.
+ \item Check the grading rubric for all the items which will be graded in this Assignment!
+\end{itemize}
+
+The total number of points of this assignment is 50 points.
+
+Good luck!
+
+\newpage
+
+# K means clustering
+
+In this project, you will implement an unsupervised learning technique called **k-means clustering**. This method is used to partition a dataset into $k$ distinct clusters based on the similarity of the data points. The goal of k-means is to minimize the variance within each cluster, so that points within the same cluster are as similar as possible.
+
+While there is a built-in function in base R that can perform k-means clustering, you are not allowed to use it in this project. Instead, you will manually implement the algorithm from scratch.
+
+The k-means algorithm works as follows:
+
+\begin{itemize}
+\item Choose $k$ initial centroids (typically randomly selected points from the dataset).
+\item Assign each data point to the closest centroid, forming KK clusters.
+\item Recompute the centroids of the clusters by calculating the mean of all points assigned to each cluster.
+\item Repeat the assignment and update steps until the centroids no longer change (or change very little), indicating convergence.
+\end{itemize}
+
+Your task is to replicate this process and implement the algorithm manually using base `R` functions, without relying on any built-in `R` functions (such as  the `knn()` function) and without relying on any specialized clustering libraries.
+
+
+Consider \underline{one of the following data set}:
+
+```{r, eval = FALSE}
+taylor_album_songs <- read.csv('https://raw.githubusercontent.com/rfordatascience/tidytuesday/master/data/2023/2023-10-17/taylor_album_songs.csv')
+songs_reduced <- taylor_album_songs[,c("track_number", "energy", "valence")]
+songs_reduced_final <- songs_reduced[rowSums(is.na(songs_reduced))==0,]
+```
+
+Or use the data set `Mall_Customers.csv` uploaded on Canvas in the folder named `final project`.
+
+```{r, eval = F}
+mall_customers <- read.csv("Mall_Customers.csv")
+```
+
+In order to simplify your task, if you are working with the `mall_customers` data set, consider only the quantitative variables. 
+If you are working with the Taylor Swift songs, you will work on with energy and valence since track_number is a label rather than a meaningful variable.
+
+1. In order to start exploring the dataset, use base `R` or `ggplot` to create data visualizations (at least 2).
+```{r}
+library(ggplot2)
+```
+
+
+```{r}
+plot(songs_reduced_final$energy,songs_reduced_final$valence, col="blue", xlab = "Energy", ylab = "Valence", main = "Valence V.S. Energy")
+
+
+
+```
+
+```{r}
+songsdf <- data.frame(songs_reduced_final)
+ggplot(data = songsdf, mapping = aes(x = energy, y = valence)) +
+geom_point(col = "red") +
+geom_abline(col = "blue")+
+  theme_classic()
+```
+
+
+
+
+2. Randomly choose any three points from the dataset which will be your initial centroids. These will define the centers of the first initial three clusters. This means that you are defining $k=3$ clusters.
+
+```{r}
+set.seed(123)
+k <- 3
+mydata <- songs_reduced_final[, c("energy", "valence")]
+incentroids <- mydata[sample(nrow(mydata), k, replace = F),]
+
+incentroids
+
+```
+
+
+3. Measure the distance between all the points in the dataset and each of the three initial clusters. Assign the points to the nearest cluster. Do this in the most efficient way.
+
+
+```{r}
+assign_clusters <- function(datax, centroidsx){
+distances <- sqrt(outer(datax[,1], centroidsx[,1], "-")^2 +
+                  outer(datax[,2], centroidsx[,2], "-")^2)
+
+clusters <- max.col(-distances)
+return(clusters)
+}
+kclusters <- assign_clusters(mydata, incentroids)
+
+```
+
+
+
+4. After assigning all points to the closest centroid, recalculate the centroids. This is achieved by computing the mean of all the variables of the points assigned to each cluster. This will give you the new centroids. 
+
+
+```{r}
+recentroids <- incentroids
+
+recalcentroids <- function(dataset, rcentroids, rclusters) {
+  for (i in 1:nrow(rcentroids)) {
+    checkzero <- dataset[rclusters == i, ]
+    if(nrow(checkzero) > 0){
+    rcentroids[i,] <- 
+      colMeans(dataset[which(rclusters == i),])
+    } else{
+      recentroids[i,] <- recentroids[i,]
+    }
+  }
+  return(rcentroids)
+}
+recentroids <- recalcentroids(recentroids, kclusters)
+recentroids
+```
+
+
+5. Repeat the process of assigning points to clusters and updating the centroids until the centroids no longer change.
+
+
+```{r}
+set.seed(123)
+difference <- 100
+tol <- 1e-6
+iters <- 0 
+centroids <- recentroids
+
+while(difference > tol && iters < 10000){
+#kclusters is a vector of nrows in taylor song data
+#Here we are calculating the difference of each observation and all 3 centroids. The the data point is clustered with the centroid that has the lowest difference. kclusters goes to the index of that data point and marks it 1,2, or3 correlating to its cluster
+  
+  
+kclusters <- assign_clusters(mydata, centroids)
+#here we are finding the mean of each cluster and making those the new centroids
+
+
+icentroids <- recalcentroids(centroids, kclusters)
+
+#We check the difference between new and old centroids, then make the new centroids our "old" centroids. 
+
+
+difference <- sum(abs(icentroids - centroids), na.rm = T)
+if(iters == 0) difference <- 100
+iters <- iters + 1
+print(iters)
+print(difference)
+centroids <- icentroids
+}
+
+iters
+centroids
+```
+
+6. Calculate the Within-Cluster-Sum of Squared Errors (WSS) for different values of k (including the $k=3$). The WSS is given by:
+
+$$
+\text{WSS} = \sum_{k=1}^{K} \sum_{i=1}^{n_k} \left( \mathbf{x}_i^{(k)} - \boldsymbol{\mu}_k \right)^\top \left( \mathbf{x}_i^{(k)} - \boldsymbol{\mu}_k \right)
+$$
+```{r}
+#WSS function
+WSS_total <- function(X, clusters, K) {
+  X <- as.matrix(X)
+  WSS <- 0
+  idk <- 
+  for(i in 1:K){
+    clusterk <- X[which(clusters == i),]
+    muk <- colMeans(clusterk)
+    kwss <- sum(sweep(clusterk, 2, muk, "-")^2)
+    WSS <- WSS + kwss
+  }
+  return(WSS)
+}
+```
+
+
+```{r}
+#code to test different # of clusters
+set.seed(123)
+k_means <- function(mydata1){
+set.seed(123)
+ WSS <- numeric(10)
+for(c in 1:10){
+  
+difference <- 100 
+iters <- 0
+tol <- 0.000001
+
+centroids <- mydata1[sample(nrow(mydata1), c, replace = F),]
+
+while(difference > tol && iters < 10000) {
+  
+kclusters <- assign_clusters(mydata1, centroids)
+if (c == 6) elbow <- kclusters
+
+
+newcentroids <- recalcentroids(centroids, kclusters)
+if(any(is.na(newcentroids))) {
+  for (i in 1:c) {
+      newcentroids[i, ] <- centroids[i, ]  
+    
+  }
+}
+
+ difference <- sum(abs(newcentroids - centroids))
+ iters <- iters +1
+ centroids <- newcentroids
+}
+
+WSS[c] <- WSS_total(mydata1, kclusters, c)
+
+}
+
+return(WSS)
+
+}
+print(k_means(mydata))
+```
+
+
+
+
+
+where:
+
+\begin{itemize}
+\item $\mathbf{x}_i^{(k)} = (x_{i1}^{(k)}, x_{i2}^{(k)}, \dots, x_{id}^{(k)})$ is the $i$-th data point in cluster $k$, where $d$ is the number of dimensions (features).
+\item $\boldsymbol{\mu}_k = (\mu_{k1}, \mu_{k2}, \dots, \mu_{kd})$ is the centroid (mean) of cluster $k$, calculated as the average of the points in the cluster.
+\item The term $\left( \mathbf{x}_i^{(k)} - \boldsymbol{\mu}_k \right)^\top \left( \mathbf{x}_i^{(k)} - \boldsymbol{\mu}_k \right)$ represents the squared Euclidean distance between the point  $\mathbf{x}_i^{(k)}$ and its corresponding centroid $\boldsymbol{\mu}_k$.
+\end{itemize}
+
+7. Using either base R or ggplot2, plot WSS-versus-k. Choose the k for which the rate of decrease of WSS sharply changes. 
+In the plot, this is visible as an elbow. 
+
+```{r}
+wssdf <- data.frame(k = 1:10,  WSS)
+
+ggplot(data = wssdf, mapping = aes(x = k, y= WSS)) +
+  geom_point(aes(color = k == 6), size = 5) +
+  scale_color_manual(values = c("FALSE" = "darkred", "TRUE" = "blue")) +
+  theme_classic()+
+  labs(title = "k v.s WSS", x = "k", y = "WSS", color = "Elbow") +
+  scale_x_continuous(breaks=1:20)
+
+
+```
+
+
+8. Based on this clustering, add a variable called `cluster` to the data set. Use the variables in the data set (both the ones used for clustering and the ones not used for clustering) to visually describe the clusters. Explain what differences you observe. 
+
+```{r}
+mydatacluster <- data.frame(mydata, "cluster" = elbow)
+
+ggplot(mydatacluster, mapping = aes(x = energy, y = valence, color = factor(cluster)))+
+geom_point()+
+labs(color = "Cluster")
+```
+
+
+
+
+
+9. K-means clustering performs well in some situations and poorly in others. In general, it works best when data points form well-separated clusters and struggles when clusters are overlapping or absent. 
+
+\begin{itemize}
+\item[(i)] Simulate three datasets representing the following scenarios:
+* Clearly clustered data
+* Weakly clustered data
+* Data with no meaningful clusters
+Use multivariate normals and simulate two variables for each dataset. Simulate the same number of observations as in the dataset you used for parts 1-8. Use a scatterplot to represent each dataset so that the clustering structure (or lack thereof) is visually clear.
+\item[(ii)] Apply k-means to each dataset and determine the best value of k for each scenario. How does k-means behave in each scenario?
+\item[(iii)] Because k-means starts with random initializations, repeat the algorithm using 10 different random seeds. For each pair of data points, compute the proportion of times they end up in the same cluster. How does this stability measure differ across the three scenarios?
+\end{itemize}
+
+```{r}
+install.packages("MASS")
+library(MASS)
+```
+
+```{r}
+set.seed(123)
+
+n <- nrow(mydata)
+mu <- rbind(c(0,0), c(5,5), c(10,2))
+sigma <- matrix(c(1, 0, 0, 1), 2, 2)
+dataclear <- rbind(
+  mvrnorm(round(n/3), mu[1,], sigma),
+  mvrnorm(round(n/3), mu[2,], sigma),
+  mvrnorm(round(n/3), mu[3,], sigma)
+)
+
+
+dfclear <- data.frame(x = dataclear[,1], y = dataclear[,2], cluster = rep(1:3, each = round(n/3)))
+
+muweak <- rbind(c(0,0), c(2,2), c(0,3))
+Sigma_weak <- matrix(c(2, 1, 1, 2), 2, 2)
+
+data_weak <- rbind(
+  mvrnorm(round(n/3), muweak[1,], Sigma_weak),
+  mvrnorm(round(n/3), muweak[2,], Sigma_weak),
+  mvrnorm(round(n/3), muweak[3,], Sigma_weak)
+)
+dfweak <- data.frame(x = data_weak[,1], y = data_weak[,2], cluster = rep(1:3, each = round(n/3)))
+
+munone <- c(0, 0)
+sigmanone <- matrix(c(3, 1, 1, 3), 2, 2)
+datanone <- mvrnorm(n, munone, sigmanone)
+dfnone <- data.frame(x = datanone[,1], y = datanone[,2],  cluster = rep(1, n))
+
+
+
+```
+
+```{r}
+par(mfrow = c(2, 3))
+
+plot(dfclear$x, dfclear$y,
+     col = dfclear$cluster,
+     main = "Clearly clustered data",
+     xlab = "x",
+     ylab = "y")
+
+plot(dfweak$x, dfweak$y,
+     col = dfweak$cluster,
+     main = "Weak clustered data",
+     xlab = "x",
+     ylab = "y")
+
+plot(dfnone$x, dfnone$y,
+     col = dfnone$cluster,
+     main = "No Meaningful cluster",
+     xlab = "x",
+     ylab = "y" )
+
+```
+```{r}
+set.seed(123)
+dfclearnew <- dfclear[,-3]
+dfweaknew <- dfweak[,-3]
+dfnonenew <- dfnone[,-3]
+dfnonenew
+wssclear <- k_means(dfclearnew)
+wssclear
+wssweak <-k_means(dfweaknew)
+wssweak
+```
+
+
